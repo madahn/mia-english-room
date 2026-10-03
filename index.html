@@ -201,7 +201,7 @@ dialog::backdrop{background:rgba(10,20,40,.45)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
 /* mouth close-up lens */
-.lens{position:absolute;right:-4px;bottom:14px;width:110px;height:110px;border-radius:50%;overflow:hidden;border:4px solid var(--surface);box-shadow:var(--shadow);background:var(--skin)}
+.lens{display:none;position:absolute;right:-4px;bottom:14px;width:110px;height:110px;border-radius:50%;overflow:hidden;border:4px solid var(--surface);box-shadow:var(--shadow);background:var(--skin)}
 .lens svg{width:100%;height:100%;display:block}
 .lens-label{position:absolute;left:0;right:0;bottom:0;text-align:center;font-family:var(--font-display);font-weight:600;font-size:.82rem;background:color-mix(in srgb,var(--fg) 70%,transparent);color:var(--surface);padding:3px 0}
 .bubble .en .hl{background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:0 4px;margin:0 -2px}
@@ -643,6 +643,7 @@ function visemes(text){
   }
   return out.length?out:[{v:'rest',dur:1,ci:0}];
 }
+const MOUTH_ANIM=false; /* mouth-shape animation off by request */
 const lip={w:14,h:0,u:0,teeth:0,tongue:0,smile:1};
 let vt={units:[],starts:[],unitMs:90,t0:0,on:false,label:'rest',raf:0,words:[]};
 function renderMouth(){
@@ -664,7 +665,7 @@ function mouthLoop(){
     const el=(performance.now()-vt.t0)/vt.unitMs;
     let k=vt.units.length-1;for(let i=0;i<vt.units.length;i++){if(vt.starts[i]>el){k=i-1;break}}
     const unit=vt.units[Math.max(0,k)];
-    if(unit){target=VIS[unit.v];label=unit.v;highlightWord(unit.ci)}
+    if(unit){highlightWord(unit.ci);if(MOUTH_ANIM){target=VIS[unit.v];label=unit.v}}
   }
   const f=0.38;for(const key of ['w','h','u','teeth','tongue','smile'])lip[key]+=(target[key]-lip[key])*f;
   renderMouth();if(label!==vt.label){vt.label=label;setLensLabel(label);avatarMods().forEach(a=>a.setViseme(label))}
@@ -1148,7 +1149,7 @@ function confetti(){
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 
 /* ---------- Settings & boot ---------- */
-mountAvatar($('avatarHome'),false);mountAvatar($('avatarLesson'),true);renderMouth();
+mountAvatar($('avatarHome'),false);mountAvatar($('avatarLesson'),false);renderMouth();
 /* avatar wiring: photo (default) / 3D / drawn character */
 /* ---------- Photo avatar: real mouth-shape photos cross-faded by the viseme engine, blink timed to pauses ---------- */
 const PHOTO={src:'avatar/mia.jpg',w:1020,h:1159,pivot:[0.5,0.98],mouth:[0.507,0.579],
