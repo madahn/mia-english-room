@@ -1228,7 +1228,7 @@ function attach3d(){
   boxes.forEach(b=>b.classList.toggle('has3d',b===box));
   a.attach(box);if(lens)a.lens(lens);
 }
-(function(){const l=document.createElement('div');l.className='avatar-loading ko';l.textContent='미아 준비 중…';$('avatarHome').appendChild(l);$('avatarLesson').appendChild(l.cloneNode(true));
+(function(){if(prefs.avatarMode3==='svg')return;const l=document.createElement('div');l.className='avatar-loading ko';l.textContent='미아 준비 중…';$('avatarHome').appendChild(l);$('avatarLesson').appendChild(l.cloneNode(true));
   const clear=()=>document.querySelectorAll('.avatar-loading').forEach(e=>e.remove());
   document.addEventListener('avatarphoto-ready',()=>{clear();attach3d()});document.addEventListener('avatar3d-ready',()=>{clear();attach3d()});document.addEventListener('avatar3d-failed',()=>{if(prefs.avatarMode3==='3d')clear()});setTimeout(clear,25000);})();
 renderHome();preloadVoice(['core']);
