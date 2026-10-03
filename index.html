@@ -15,7 +15,7 @@
   --fg:#22314F; --muted:#6C7A98; --line:#D6E3F3;
   --accent:#FFB703; --accent-ink:#4A3300; --coral:#FB6F92; --mint:#2EC4B6; --sky:#4FA8F5; --grape:#9B6BF2;
   --good:#3BB273; --bad:#E76F51;
-  --skin:#F6CBA8; --hair:#5B3A29; --shirt:#2EC4B6; --blush:#F8A5A5; --lip:#C0392B; --mouth:#7B2222;
+  --skin:#F6CBA8; --hair:#5B3A29; --shirt:#2EC4B6; --blush:#F8A5A5; --fur:#F7E1BF; --fur2:#F2A65A; --fur3:#B5753A; --inner:#F9B3C1; --collar:#2EC4B6; --lip:#C0392B; --mouth:#7B2222;
   --shadow:0 10px 30px rgba(34,49,79,.10);
   --font-display:'Fredoka','Jua',ui-rounded,'Apple SD Gothic Neo',sans-serif;
   --font-body:'Nunito','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
@@ -254,7 +254,7 @@ dialog::backdrop{background:rgba(10,20,40,.45)}
   <header class="top">
     <div class="brand">
       <div class="logo" aria-hidden="true">🎈</div>
-      <div><h1>Mia's English Room</h1><small class="ko">미아와 함께하는 유아 영어 회화</small></div>
+      <div><h1>Mia's English Room</h1><small class="ko">고양이 선생님 미아와 함께하는 유아 영어 회화</small></div>
     </div>
     <div class="topright">
       <span class="pill" title="모은 별"><span aria-hidden="true">⭐</span> <span id="starTotal">0</span></span>
@@ -304,7 +304,7 @@ dialog::backdrop{background:rgba(10,20,40,.45)}
     <div class="row"><label for="selVoice">기기 음성 선택</label><select id="selVoice"></select></div>
     <div class="row"><label for="rngRate">말하는 속도</label><input type="range" id="rngRate" min="0.6" max="1.1" step="0.05" value="0.85"></div>
     <div class="row"><label>자동으로 다시 듣기</label><span class="seg"><button type="button" id="repOn">켜기</button><button type="button" id="repOff">끄기</button></span></div>
-    <div class="row"><label>아바타 모습</label><span class="seg"><button type="button" id="av3d">애니 선생님</button><button type="button" id="avPhoto">사진 선생님</button><button type="button" id="av2d">그림 캐릭터</button></span></div>
+    <div class="row"><label>아바타 모습</label><span class="seg"><button type="button" id="av2d">고양이 선생님</button><button type="button" id="av3d">애니 선생님</button><button type="button" id="avPhoto">사진 선생님</button></span></div>
     <div class="row"><label>마이크 상태</label><span class="note" id="micStatus">확인 중…</span></div>
     <p class="note ko">마이크로 말하기 기능은 Chrome, Edge, Safari 최신 버전에서 동작해요. 마이크를 쓸 수 없는 환경에서는 "말했어요!" 버튼으로 진행합니다.</p>
     <div class="row">
@@ -395,7 +395,7 @@ function tick(){
 }
 api.ready=(async()=>{
   try{
-    await new Promise(r=>{const want=()=>{try{const p=JSON.parse(localStorage.getItem('mia-prefs')||'{}');return (p.avatarMode2||'3d')==='3d'}catch(e){return true}};if(want())r();else document.addEventListener('avatar3d-request',r,{once:true})});
+    await new Promise(r=>{const want=()=>{try{const p=JSON.parse(localStorage.getItem('mia-prefs')||'{}');return p.avatarMode3==='3d'}catch(e){return false}};if(want())r();else document.addEventListener('avatar3d-request',r,{once:true})});
     if(!window.WebGLRenderingContext)throw new Error('no webgl');
     renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
     renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.domElement.className='avatar3d-canvas';
@@ -547,36 +547,43 @@ function mouthMarkup(){const id='mc'+(++clipN);return `
       <path class="mouthFill" d="M86 143 L114 143 Z" fill="var(--mouth)"/>
       <rect class="teeth" x="86" y="140" width="28" height="5" rx="1.5" fill="#fff" clip-path="url(#${id})" opacity="0"/>
       <ellipse class="tongue" cx="100" cy="150" rx="8" ry="0" fill="#E8707A" clip-path="url(#${id})" opacity="0"/>
-      <path class="mouthLip" d="M86 143 L114 143" stroke="var(--lip)" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+      <path class="mouthLip" d="M86 143 L114 143" stroke="var(--lip)" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round" opacity="0"/>
       <path class="smile" d="M86 139 Q100 153 114 139" stroke="var(--lip)" stroke-width="3.5" fill="none" stroke-linecap="round"/>
     </g>`}
 function avatarSVG(){return `
-<svg class="avatar" viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg" aria-label="Mia, your English tutor" role="img">
+<svg class="avatar" viewBox="0 0 200 260" xmlns="http://www.w3.org/2000/svg" aria-label="Mia the cat, your English tutor" role="img">
+  <path d="M146 232 C182 226 184 192 166 180" fill="none" stroke="var(--fur)" stroke-width="15" stroke-linecap="round"/>
+  <path d="M170 184 C176 190 178 198 174 206" fill="none" stroke="var(--fur2)" stroke-width="15" stroke-linecap="round"/>
   <g id="body">
-    <path d="M52 262 C52 206 72 186 100 186 C128 186 148 206 148 262 Z" fill="var(--shirt)"/>
-    <path d="M86 186 Q100 200 114 186" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="3"/>
-    <rect x="89" y="160" width="22" height="32" rx="10" fill="var(--skin)"/>
-    <g id="armL" style="transform-origin:62px 206px">
-      <path d="M62 206 L40 168" stroke="var(--skin)" stroke-width="15" stroke-linecap="round"/>
-      <circle cx="39" cy="162" r="11" fill="var(--skin)"/>
+    <path d="M54 262 C54 208 74 190 100 190 C126 190 146 208 146 262 Z" fill="var(--fur)"/>
+    <path d="M70 262 C70 226 84 212 100 212 C116 212 130 226 130 262 Z" fill="#FFF6E8"/>
+    <path d="M66 198 Q100 222 134 198 L132 208 Q100 230 68 208 Z" fill="var(--collar)"/>
+    <circle cx="100" cy="222" r="6" fill="var(--accent)"/>
+    <g id="armL" style="transform-origin:62px 208px">
+      <path d="M62 208 L40 170" stroke="var(--fur)" stroke-width="16" stroke-linecap="round"/>
+      <circle cx="39" cy="164" r="12" fill="var(--fur)"/>
+      <circle cx="34" cy="160" r="3" fill="var(--inner)"/><circle cx="41" cy="156" r="3" fill="var(--inner)"/><circle cx="46" cy="161" r="3" fill="var(--inner)"/>
     </g>
-    <path d="M138 206 L154 244" stroke="var(--skin)" stroke-width="15" stroke-linecap="round"/>
-    <circle cx="156" cy="248" r="11" fill="var(--skin)"/>
+    <path d="M138 208 L154 244" stroke="var(--fur)" stroke-width="16" stroke-linecap="round"/>
+    <circle cx="156" cy="248" r="12" fill="var(--fur)"/>
   </g>
   <g id="head" style="transform-origin:100px 165px">
-    <ellipse cx="100" cy="112" rx="63" ry="72" fill="var(--hair)"/>
-    <ellipse cx="100" cy="108" rx="50" ry="56" fill="var(--skin)"/>
-    <circle id="earL" cx="51" cy="112" r="9" fill="var(--skin)"/>
-    <circle id="earR" cx="149" cy="112" r="9" fill="var(--skin)" style="transform-origin:149px 112px"/>
-    <path d="M50 100 C53 56 78 44 100 44 C122 44 147 56 150 100 C142 78 128 72 112 82 C100 70 88 70 76 82 C64 76 56 84 50 100 Z" fill="var(--hair)"/>
-    <circle cx="150" cy="70" r="9" fill="var(--accent)"/>
-    <path id="browL" d="M66 90 Q78 83 90 89" stroke="var(--hair)" stroke-width="4" fill="none" stroke-linecap="round" style="transform-origin:78px 88px"/>
-    <path id="browR" d="M110 89 Q122 83 134 90" stroke="var(--hair)" stroke-width="4" fill="none" stroke-linecap="round" style="transform-origin:122px 88px"/>
-    <g class="eye" style="transform-origin:78px 108px"><ellipse cx="78" cy="108" rx="9.5" ry="11" fill="#fff"/><circle cx="79" cy="110" r="5.5" fill="#2A2C3A"/><circle cx="81.5" cy="107" r="2" fill="#fff"/></g>
-    <g class="eye" style="transform-origin:122px 108px"><ellipse cx="122" cy="108" rx="9.5" ry="11" fill="#fff"/><circle cx="123" cy="110" r="5.5" fill="#2A2C3A"/><circle cx="125.5" cy="107" r="2" fill="#fff"/></g>
-    <ellipse cx="66" cy="128" rx="9" ry="5" fill="var(--blush)" opacity=".75"/>
-    <ellipse cx="134" cy="128" rx="9" ry="5" fill="var(--blush)" opacity=".75"/>
-    <path d="M98 121 Q100 127 104 123" stroke="#D9906F" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <path id="earL" d="M48 96 L56 36 L98 74 Z" fill="var(--fur)"/>
+    <path d="M58 86 L62 52 L88 74 Z" fill="var(--inner)"/>
+    <g id="earR" style="transform-origin:150px 96px"><path d="M152 96 L144 36 L102 74 Z" fill="var(--fur)"/><path d="M142 86 L138 52 L112 74 Z" fill="var(--inner)"/></g>
+    <ellipse cx="100" cy="112" rx="58" ry="52" fill="var(--fur)"/>
+    <path d="M84 66 Q100 58 116 66 L112 82 Q100 76 88 82 Z" fill="var(--fur2)"/>
+    <path d="M96 60 L100 48 L104 60 Z" fill="var(--fur2)"/>
+    <path d="M44 110 Q46 96 56 90 L58 110 Z" fill="var(--fur2)" opacity=".85"/>
+    <path d="M156 110 Q154 96 144 90 L142 110 Z" fill="var(--fur2)" opacity=".85"/>
+    <path id="browL" d="M68 92 Q78 86 90 91" stroke="var(--fur3)" stroke-width="3.5" fill="none" stroke-linecap="round" style="transform-origin:78px 90px"/>
+    <path id="browR" d="M110 91 Q122 86 132 92" stroke="var(--fur3)" stroke-width="3.5" fill="none" stroke-linecap="round" style="transform-origin:122px 90px"/>
+    <g class="eye" style="transform-origin:78px 110px"><ellipse cx="78" cy="110" rx="11" ry="12.5" fill="#fff"/><ellipse cx="79" cy="112" rx="6.5" ry="8" fill="#2A2C3A"/><circle cx="82" cy="108" r="2.4" fill="#fff"/></g>
+    <g class="eye" style="transform-origin:122px 110px"><ellipse cx="122" cy="110" rx="11" ry="12.5" fill="#fff"/><ellipse cx="123" cy="112" rx="6.5" ry="8" fill="#2A2C3A"/><circle cx="126" cy="108" r="2.4" fill="#fff"/></g>
+    <ellipse cx="62" cy="130" rx="9" ry="5" fill="var(--blush)" opacity=".8"/>
+    <ellipse cx="138" cy="130" rx="9" ry="5" fill="var(--blush)" opacity=".8"/>
+    <path d="M95 126 L105 126 L100 132 Z" fill="var(--inner)"/>
+    <path d="M42 122 L70 125 M42 132 L70 131 M46 142 L70 137 M158 122 L130 125 M158 132 L130 131 M154 142 L130 137" stroke="var(--fur3)" stroke-width="2" stroke-linecap="round" opacity=".7"/>
     ${mouthMarkup()}
   </g>
 </svg>`}
@@ -589,6 +596,7 @@ function lensSVG(){return `
 const avatars=[],mouths=[];
 function mountAvatar(el,withLens){
   el.innerHTML=avatarSVG()+(withLens?`<div class="lens" title="입모양 확대">${lensSVG()}<span class="lens-label" data-lens-label>·</span></div>`:'');
+  el.querySelectorAll('.smile').forEach(p=>{p.setAttribute('d','M89 133 Q94.5 141 100 134 Q105.5 141 111 133');p.setAttribute('stroke','var(--fur3)');p.setAttribute('stroke-width','3')});
   const svg=el.querySelector('svg.avatar');avatars.push(svg);mouths.push(svg);
   const lens=el.querySelector('svg.lens-svg');if(lens)mouths.push(lens);
   return svg;
@@ -718,7 +726,7 @@ document.addEventListener('pointerdown',()=>{try{if(prefs.naturalVoice)audioCtx(
 /* ---------- Speech (TTS) ---------- */
 const synth=window.speechSynthesis;
 let voices=[],voice=null;
-const prefs=load('mia-prefs',{rate:0.85,voiceName:null,autoRepeat:true,avatar3d:true});if(!prefs.avatarMode2)prefs.avatarMode2='3d';if(prefs.naturalVoice===undefined)prefs.naturalVoice=true;
+const prefs=load('mia-prefs',{rate:0.85,voiceName:null,autoRepeat:true,avatar3d:true});if(!prefs.avatarMode3)prefs.avatarMode3='svg';if(prefs.naturalVoice===undefined)prefs.naturalVoice=true;
 function pickVoice(){
   if(!synth)return;
   voices=synth.getVoices().filter(v=>/^en/i.test(v.lang));
@@ -1212,7 +1220,7 @@ const avatarPhoto=(()=>{
   return api;
 })();
 function attach3d(){
-  const mode=prefs.avatarMode2;const boxes=[$('avatarHome'),$('avatarLesson')];const lens=$('avatarLesson').querySelector('.lens');
+  const mode=prefs.avatarMode3;const boxes=[$('avatarHome'),$('avatarLesson')];const lens=$('avatarLesson').querySelector('.lens');
   boxes.forEach(b=>b.classList.remove('has3d'));if(lens)lens.classList.remove('has3d');document.querySelectorAll('.avatar3d-canvas').forEach(c=>c.remove());
   const a=mode==='photo'?avatarPhoto:mode==='3d'?window.avatar3d:null;
   if(!a||!a.ok)return;
@@ -1222,7 +1230,7 @@ function attach3d(){
 }
 (function(){const l=document.createElement('div');l.className='avatar-loading ko';l.textContent='미아 준비 중…';$('avatarHome').appendChild(l);$('avatarLesson').appendChild(l.cloneNode(true));
   const clear=()=>document.querySelectorAll('.avatar-loading').forEach(e=>e.remove());
-  document.addEventListener('avatarphoto-ready',()=>{clear();attach3d()});document.addEventListener('avatar3d-ready',()=>{clear();attach3d()});document.addEventListener('avatar3d-failed',()=>{if(prefs.avatarMode2==='3d')clear()});setTimeout(clear,25000);})();
+  document.addEventListener('avatarphoto-ready',()=>{clear();attach3d()});document.addEventListener('avatar3d-ready',()=>{clear();attach3d()});document.addEventListener('avatar3d-failed',()=>{if(prefs.avatarMode3==='3d')clear()});setTimeout(clear,25000);})();
 renderHome();preloadVoice(['core']);
 $('btnHome').onclick=exitLesson;$('btnBack').onclick=exitLesson;
 $('btnContinue').onclick=()=>startLesson(nextLesson().id);
@@ -1232,8 +1240,8 @@ $('selVoice').onchange=e=>{prefs.voiceName=e.target.value;save('mia-prefs',prefs
 $('rngRate').value=prefs.rate;$('rngRate').onchange=e=>{prefs.rate=+e.target.value;save('mia-prefs',prefs);speak('Nice to meet you!')};
 function vxUI(){$('vxNat').classList.toggle('on',prefs.naturalVoice);$('vxDev').classList.toggle('on',!prefs.naturalVoice)}
 $('vxNat').onclick=()=>{prefs.naturalVoice=true;save('mia-prefs',prefs);vxUI();speak('Hello! I am Mia.')};$('vxDev').onclick=()=>{prefs.naturalVoice=false;save('mia-prefs',prefs);vxUI();speak('Hello! I am Mia.')};vxUI();
-function avUI(){$('avPhoto').classList.toggle('on',prefs.avatarMode2==='photo');$('av3d').classList.toggle('on',prefs.avatarMode2==='3d');$('av2d').classList.toggle('on',prefs.avatarMode2==='svg')}
-const setAv=m=>{prefs.avatarMode2=m;save('mia-prefs',prefs);avUI();attach3d()};$('avPhoto').onclick=()=>setAv('photo');$('av3d').onclick=()=>{setAv('3d');document.dispatchEvent(new CustomEvent('avatar3d-request'))};$('av2d').onclick=()=>setAv('svg');avUI();
+function avUI(){$('avPhoto').classList.toggle('on',prefs.avatarMode3==='photo');$('av3d').classList.toggle('on',prefs.avatarMode3==='3d');$('av2d').classList.toggle('on',prefs.avatarMode3==='svg')}
+const setAv=m=>{prefs.avatarMode3=m;save('mia-prefs',prefs);avUI();attach3d()};$('avPhoto').onclick=()=>setAv('photo');$('av3d').onclick=()=>{setAv('3d');document.dispatchEvent(new CustomEvent('avatar3d-request'))};$('av2d').onclick=()=>setAv('svg');avUI();
 function repUI(){$('repOn').classList.toggle('on',prefs.autoRepeat);$('repOff').classList.toggle('on',!prefs.autoRepeat)}
 $('repOn').onclick=()=>{prefs.autoRepeat=true;save('mia-prefs',prefs);repUI()};$('repOff').onclick=()=>{prefs.autoRepeat=false;save('mia-prefs',prefs);repUI()};repUI();
 $('btnReset').onclick=()=>{if($('btnReset').dataset.arm){progress={};save('mia-progress',progress);renderHome();$('btnReset').textContent='초기화 완료';delete $('btnReset').dataset.arm}else{$('btnReset').dataset.arm='1';$('btnReset').textContent='정말 초기화할까요? 다시 누르기'}};
