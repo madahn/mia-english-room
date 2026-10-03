@@ -719,7 +719,7 @@ let voiceManifest=null,voiceManifestP=null,curSource=null;const voiceBins={},voi
 const voiceKey=t=>t.replace(/\s+/g,' ').trim();
 function audioCtx(){actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume().catch(()=>{});return actx}
 function loadManifest(){if(!voiceManifestP)voiceManifestP=fetch(VOICE_BASE+'voice.json').then(r=>r.ok?r.json():null).catch(()=>null).then(m=>{voiceManifest=m;return m});return voiceManifestP}
-function loadGroup(g){if(!voiceBins[g])voiceBins[g]=fetch(VOICE_BASE+'voice-'+g+'.bin').then(r=>r.ok?r.arrayBuffer():null).catch(()=>null);return voiceBins[g]}
+function loadGroup(g){if(!voiceBins[g])voiceBins[g]=fetch(VOICE_BASE+'voice-'+g+'.mp3').then(r=>r.ok?r.arrayBuffer():null).catch(()=>null);return voiceBins[g]}
 function preloadVoice(groups){if(!prefs.naturalVoice)return;loadManifest().then(m=>{if(m)groups.forEach(loadGroup)})}
 async function getClip(text){
   if(!prefs.naturalVoice||!(window.AudioContext||window.webkitAudioContext))return null;
