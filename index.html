@@ -304,7 +304,7 @@ dialog::backdrop{background:rgba(10,20,40,.45)}
     <div class="row"><label for="selVoice">기기 음성 선택</label><select id="selVoice"></select></div>
     <div class="row"><label for="rngRate">말하는 속도</label><input type="range" id="rngRate" min="0.6" max="1.1" step="0.05" value="0.85"></div>
     <div class="row"><label>자동으로 다시 듣기</label><span class="seg"><button type="button" id="repOn">켜기</button><button type="button" id="repOff">끄기</button></span></div>
-    <div class="row"><label>아바타 모습</label><span class="seg"><button type="button" id="avPhoto">사진 선생님</button><button type="button" id="av3d">3D 선생님</button><button type="button" id="av2d">그림 캐릭터</button></span></div>
+    <div class="row"><label>아바타 모습</label><span class="seg"><button type="button" id="av3d">애니 선생님</button><button type="button" id="avPhoto">사진 선생님</button><button type="button" id="av2d">그림 캐릭터</button></span></div>
     <div class="row"><label>마이크 상태</label><span class="note" id="micStatus">확인 중…</span></div>
     <p class="note ko">마이크로 말하기 기능은 Chrome, Edge, Safari 최신 버전에서 동작해요. 마이크를 쓸 수 없는 환경에서는 "말했어요!" 버튼으로 진행합니다.</p>
     <div class="row">
@@ -316,130 +316,111 @@ dialog::backdrop{background:rgba(10,20,40,.45)}
 
 <canvas id="confetti"></canvas>
 
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/","@pixiv/three-vrm":"https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.5.5/lib/three-vrm.module.min.js"}}</script>
 <script type="module">
-/* Mia 3D avatar: Three.js skinned head with viseme + expression blendshapes.
+/* Mia anime avatar: VRM model (three-vrm) with vowel visemes, expressions, blink, look-at and hair physics.
    Exposes window.avatar3d = {attach(el), lens(el), setViseme(label), mood(name), listening(on), speaking(on), ready, ok} */
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {VRMLoaderPlugin, VRMUtils} from '@pixiv/three-vrm';
 
-const VISEME_MAP={
-  rest:{}, A:{viseme_aa:1,JawOpen:0.25}, E:{viseme_E:0.85,viseme_I:0.35}, O:{viseme_O:1}, M:{viseme_PP:1},
-  F:{viseme_FF:1}, L:{viseme_nn:0.9,TongueOut:0.1}, S:{viseme_SS:0.9}, CH:{viseme_CH:1}, R:{viseme_RR:1}
-};
-const VISEME_KEYS=['viseme_aa','viseme_E','viseme_I','viseme_O','viseme_U','viseme_PP','viseme_FF','viseme_TH','viseme_DD','viseme_KK','viseme_CH','viseme_SS','viseme_nn','viseme_RR','JawOpen','TongueOut'];
-const MOODS={
-  neutral:{MouthSmileLeft:0.3,MouthSmileRight:0.3,BrowInnerUp:0.08,CheekSquintLeft:0.08,CheekSquintRight:0.08},
-  cheer:{MouthSmileLeft:0.95,MouthSmileRight:0.95,CheekSquintLeft:0.6,CheekSquintRight:0.6,EyeSquintLeft:0.35,EyeSquintRight:0.35,BrowInnerUp:0.35,BrowOuterUpLeft:0.5,BrowOuterUpRight:0.5},
-  wave:{MouthSmileLeft:0.8,MouthSmileRight:0.8,BrowInnerUp:0.3,BrowOuterUpLeft:0.4,BrowOuterUpRight:0.4,EyeWideLeft:0.2,EyeWideRight:0.2},
-  think:{MouthSmileLeft:0.1,MouthSmileRight:0.1,BrowInnerUp:0.55,BrowDownRight:0.35,MouthPucker:0.35,EyeLookUpLeft:0.45,EyeLookUpRight:0.45,EyeLookOutLeft:0.3,EyeLookInRight:0.3},
-  oops:{MouthSmileLeft:0,MouthSmileRight:0,BrowInnerUp:0.7,MouthFrownLeft:0.35,MouthFrownRight:0.35,EyeWideLeft:0.15,EyeWideRight:0.15},
-  listening:{MouthSmileLeft:0.35,MouthSmileRight:0.35,BrowInnerUp:0.35,BrowOuterUpLeft:0.3,BrowOuterUpRight:0.3,EyeWideLeft:0.35,EyeWideRight:0.35}
-};
-const HEAD_POSE={neutral:[0,0,0],cheer:[0,0,0],wave:[0,0.05,0.06],think:[-0.06,0.08,0.12],oops:[0.07,-0.04,-0.07],listening:[-0.03,0.06,0.09]};
+const VIS={rest:{},A:{aa:1},E:{ee:0.9,ih:0.25},I:{ih:1},O:{oh:1},U:{ou:1},M:{},F:{ih:0.35},L:{aa:0.45},S:{ih:0.4},CH:{ou:0.55},R:{ou:0.45}};
+const VIS_KEYS=['aa','ih','ou','ee','oh'];
+const MOODS={neutral:{happy:0.25},cheer:{happy:0.85},wave:{happy:0.8},think:{relaxed:0.6,lookUp:0.6},oops:{sad:0.55},listening:{happy:0.35,relaxed:0.2}};
+const HEAD_POSE={neutral:[0,0,0],cheer:[0,0,0],wave:[0,0.06,0.06],think:[-0.08,0.1,0.14],oops:[0.08,-0.05,-0.08],listening:[-0.04,0.08,0.1]};
 
 const api={ok:false,ready:null,attach(){},lens(){},setViseme(){},mood(){},listening(){},speaking(){}};
 window.avatar3d=api;
-
 const state={viseme:'rest',mood:'neutral',listening:false,speaking:false};
 const want={},cur={};
-let scene,camera,lensCam,renderer,lensRenderer,model,meshes=[],headBone,neckBone,spineBone,headQ,neckQ,spineQ;
+let scene,camera,lensCam,renderer,lensRenderer,vrm,headBone,neckBone,spineBone,headQ,neckQ,spineQ,lookTarget;
 let container=null,lensEl=null,eyeCenter=new THREE.Vector3(),mouthCenter=new THREE.Vector3();
-let blinkAt=1.5,blinkPhase=0,saccadeAt=1,saccade={x:0,y:0},t0=performance.now(),last=0;
+let blinkAt=1.6,blinkPhase=0,saccadeAt=1,saccade={x:0,y:0},t0=performance.now(),last=0,lastSpeak=false,speakEndAt=-1,armT=0;
 
-function setWant(obj,scale=1){for(const k in obj)want[k]=obj[k]*scale}
-function clearGroup(keys){keys.forEach(k=>want[k]=0)}
-function applyMorph(name,v){for(const m of meshes){const i=m.morphTargetDictionary[name];if(i!==undefined)m.morphTargetInfluences[i]=v}}
-
-api.setViseme=label=>{state.viseme=VISEME_MAP[label]?label:'rest'};
-api.mood=name=>{state.mood=MOODS[name]?name:'neutral'};
+api.setViseme=l=>{state.viseme=VIS[l]?l:'rest'};
+api.mood=n=>{state.mood=MOODS[n]?n:'neutral';if(n==='wave')armT=1};
 api.listening=on=>{state.listening=!!on};
 api.speaking=on=>{state.speaking=!!on};
 api.attach=el=>{container=el;if(!renderer)return;el.appendChild(renderer.domElement);el.classList.add('has3d');resize()};
 api.lens=el=>{lensEl=el;if(!lensRenderer||!el)return;el.appendChild(lensRenderer.domElement);el.classList.add('has3d');resize()};
-
 function resize(){
   if(container&&renderer){const w=container.clientWidth,h=container.clientHeight;if(w&&h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}}
   if(lensEl&&lensRenderer){const w=lensEl.clientWidth,h=lensEl.clientHeight;if(w&&h){lensRenderer.setSize(w,h,false);lensCam.aspect=w/h;lensCam.updateProjectionMatrix()}}
 }
-
-function skinnedCenter(mesh,targetName){
-  const dict=mesh.morphTargetDictionary;const ti=dict[targetName];if(ti===undefined)return null;
-  const delta=mesh.geometry.morphAttributes.position[ti];const pos=mesh.geometry.attributes.position;
-  const v=new THREE.Vector3(),sum=new THREE.Vector3();let n=0;
-  for(let i=0;i<pos.count;i++){if(Math.abs(delta.getX(i))+Math.abs(delta.getY(i))+Math.abs(delta.getZ(i))<1e-5)continue;v.fromBufferAttribute(pos,i);mesh.applyBoneTransform(i,v);v.applyMatrix4(mesh.matrixWorld);sum.add(v);n++}
-  return n?sum.multiplyScalar(1/n):null;
-}
-
+function setExpr(name,v){const em=vrm.expressionManager;if(em&&em.getExpression(name))em.setValue(name,v)}
 function frame(){
-  const up=new THREE.Vector3(0,1,0);
-  const look=eyeCenter.clone().add(new THREE.Vector3(0,-0.055,0));
-  camera.position.copy(look).add(new THREE.Vector3(0,0.02,0.78));camera.lookAt(look);
-  lensCam.position.copy(mouthCenter).add(new THREE.Vector3(0,0.01,0.24));lensCam.lookAt(mouthCenter);
+  const look=eyeCenter.clone().add(new THREE.Vector3(0,-0.07,0));
+  camera.position.copy(look).add(new THREE.Vector3(0,0.02,0.95));camera.lookAt(look);
+  lensCam.position.copy(mouthCenter).add(new THREE.Vector3(0,0.005,0.2));lensCam.lookAt(mouthCenter);
 }
-
 function tick(){
   requestAnimationFrame(tick);
   const now=performance.now();const t=(now-t0)/1000;const dt=Math.min(0.05,(now-last)/1000||0.016);last=now;
-  /* expression targets */
-  const base=state.listening&&!state.speaking?MOODS.listening:MOODS[state.mood];
   for(const k in want)want[k]=0;
-  setWant(base,state.speaking&&state.mood==='neutral'?0.45:1);
-  const vis=VISEME_MAP[state.viseme];for(const k in vis)want[k]=vis[k];
-  /* blink */
-  if(t>blinkAt){blinkPhase+=dt/0.11;if(blinkPhase>=2){blinkPhase=0;blinkAt=t+2.2+Math.random()*3.5}}
+  const base=state.listening&&!state.speaking?MOODS.listening:MOODS[state.mood];
+  for(const k in base)want[k]=base[k]*(state.speaking&&state.mood==='neutral'?0.5:1);
+  const vis=VIS[state.viseme];for(const k in vis)want[k]=vis[k];
+  if(state.speaking&&state.mood==='cheer')want.happy=0.45;
+  /* blink in pauses, once at speech start and just after it ends */
+  if(state.speaking&&!lastSpeak)blinkAt=Math.min(blinkAt,t+0.15);
+  if(!state.speaking&&lastSpeak)speakEndAt=t;lastSpeak=state.speaking;
+  if(speakEndAt>=0&&t>speakEndAt+0.35){blinkAt=Math.min(blinkAt,t);speakEndAt=-1}
+  if(blinkPhase===0&&t>blinkAt&&(!state.speaking||state.viseme==='rest'))blinkPhase=0.001;
+  if(blinkPhase>0){blinkPhase+=dt/0.09;if(blinkPhase>=2){blinkPhase=0;blinkAt=t+(state.speaking?3.4:2.4)+Math.random()*3}}
   const bl=blinkPhase>0?Math.sin(Math.min(1,blinkPhase<1?blinkPhase:2-blinkPhase)*Math.PI/2):0;
-  want.EyeBlinkLeft=(want.EyeBlinkLeft||0)+bl;want.EyeBlinkRight=(want.EyeBlinkRight||0)+bl;
-  /* eye saccades */
-  if(t>saccadeAt){saccadeAt=t+0.8+Math.random()*2.2;saccade={x:(Math.random()-0.5)*0.5,y:(Math.random()-0.5)*0.3};if(Math.random()<0.4)saccade={x:0,y:0}}
-  if(!state.listening&&state.mood!=='think'){
-    want.EyeLookOutLeft=(want.EyeLookOutLeft||0)+Math.max(0,saccade.x);want.EyeLookInRight=(want.EyeLookInRight||0)+Math.max(0,saccade.x);
-    want.EyeLookInLeft=(want.EyeLookInLeft||0)+Math.max(0,-saccade.x);want.EyeLookOutRight=(want.EyeLookOutRight||0)+Math.max(0,-saccade.x);
-    want.EyeLookUpLeft=(want.EyeLookUpLeft||0)+Math.max(0,saccade.y);want.EyeLookUpRight=(want.EyeLookUpRight||0)+Math.max(0,saccade.y);
-    want.EyeLookDownLeft=(want.EyeLookDownLeft||0)+Math.max(0,-saccade.y);want.EyeLookDownRight=(want.EyeLookDownRight||0)+Math.max(0,-saccade.y);
-  }
-  /* smooth and apply */
-  for(const k in want){const target=Math.min(1,want[k]);const fast=VISEME_KEYS.includes(k)||k.startsWith('EyeBlink');const r=fast?0.5:0.12;cur[k]=(cur[k]||0)+(target-(cur[k]||0))*r;applyMorph(k,cur[k])}
-  /* head motion */
+  want.blink=bl;
+  for(const k in want){const target=Math.min(1,want[k]);const fast=VIS_KEYS.includes(k)||k==='blink';const r=fast?0.45:0.12;cur[k]=(cur[k]||0)+(target-(cur[k]||0))*r;setExpr(k,cur[k])}
+  /* eyes: small saccades, look at the viewer otherwise */
+  if(t>saccadeAt){saccadeAt=t+0.9+Math.random()*2.4;saccade={x:(Math.random()-0.5)*0.12,y:(Math.random()-0.5)*0.06};if(Math.random()<0.4)saccade={x:0,y:0}}
+  if(lookTarget){const think=state.mood==='think';lookTarget.position.copy(camera.position).add(new THREE.Vector3(saccade.x+(think?-0.15:0),saccade.y+(think?0.18:0),0))}
+  /* head and body motion */
   if(headBone){
     const pose=HEAD_POSE[state.listening&&!state.speaking?'listening':state.mood]||HEAD_POSE.neutral;
-    const open=(cur.viseme_aa||0)+(cur.viseme_O||0)*0.6+(cur.viseme_E||0)*0.4;
-    const nod=state.speaking?Math.sin(t*5.2)*0.012+open*0.02:0;
-    const bounce=state.mood==='cheer'?Math.sin(t*9)*0.03:0;
-    const px=pose[0]+Math.sin(t*0.9)*0.012+nod+bounce, py=pose[1]+Math.sin(t*0.5)*0.03+(state.speaking?Math.sin(t*1.7)*0.02:0), pz=pose[2]+Math.sin(t*0.7)*0.01;
-    /* Biped bones: local X is the bone axis (up), so pitch is about Z, yaw about Y, roll about X */
-    const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(pz*0.5,py,-px));
-    headBone.quaternion.copy(headQ).multiply(q);
-    if(neckBone){const qn=new THREE.Quaternion().setFromEuler(new THREE.Euler(pz*0.3,py*0.4,-px*0.4));neckBone.quaternion.copy(neckQ).multiply(qn)}
-    if(spineBone){const qs=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,Math.sin(t*0.5)*0.01,-Math.sin(t*1.3)*0.006));spineBone.quaternion.copy(spineQ).multiply(qs)}
+    const open=(cur.aa||0)+(cur.oh||0)*0.6+(cur.ee||0)*0.4+(cur.ou||0)*0.4;
+    const nod=state.speaking?Math.sin(t*5.2)*0.012+open*0.025:0;
+    const bounce=state.mood==='cheer'?Math.sin(t*9)*0.035:0;
+    const px=pose[0]+Math.sin(t*0.9)*0.012+nod+bounce,py=pose[1]+Math.sin(t*0.5)*0.03+(state.speaking?Math.sin(t*1.7)*0.02:0),pz=pose[2]+Math.sin(t*0.7)*0.01;
+    headBone.quaternion.copy(headQ).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(px,py,pz)));
+    if(neckBone)neckBone.quaternion.copy(neckQ).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(px*0.4,py*0.4,pz*0.3)));
+    if(spineBone)spineBone.quaternion.copy(spineQ).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.sin(t*1.3)*0.006,Math.sin(t*0.5)*0.01,0)));
   }
+  /* arms: rest at the sides; a wave on request */
+  const h=vrm.humanoid;const rUp=h.getNormalizedBoneNode('rightUpperArm'),lUp=h.getNormalizedBoneNode('leftUpperArm'),rLo=h.getNormalizedBoneNode('rightLowerArm');
+  if(armT>0)armT=Math.max(0,armT-dt/2.2);
+  const wave=armT>0?Math.sin(armT*Math.PI):0;
+  if(rUp)rUp.rotation.set(0,0,-1.15+wave*2.2);if(lUp)lUp.rotation.set(0,0,1.15);if(rLo)rLo.rotation.set(0,0,wave*(0.6+Math.sin(t*14)*0.35));
+  vrm.update(dt);
   if(container&&container.isConnected&&container.offsetParent!==null)renderer.render(scene,camera);
   if(lensEl&&lensEl.isConnected&&lensEl.offsetParent!==null)lensRenderer.render(scene,lensCam);
 }
-
 api.ready=(async()=>{
   try{
-    await new Promise(r=>{const want=()=>{try{const p=JSON.parse(localStorage.getItem('mia-prefs')||'{}');return p.avatarMode==='3d'}catch(e){return false}};if(want())r();else{document.addEventListener('avatar3d-request',r,{once:true})}});
+    await new Promise(r=>{const want=()=>{try{const p=JSON.parse(localStorage.getItem('mia-prefs')||'{}');return (p.avatarMode2||'3d')==='3d'}catch(e){return true}};if(want())r();else document.addEventListener('avatar3d-request',r,{once:true})});
     if(!window.WebGLRenderingContext)throw new Error('no webgl');
     renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
-    renderer.domElement.className='avatar3d-canvas';
-    lensRenderer=new THREE.WebGLRenderer({antialias:true,alpha:true});lensRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));lensRenderer.outputColorSpace=THREE.SRGBColorSpace;lensRenderer.toneMapping=THREE.ACESFilmicToneMapping;lensRenderer.toneMappingExposure=1.05;lensRenderer.domElement.className='avatar3d-canvas';
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.domElement.className='avatar3d-canvas';
+    lensRenderer=new THREE.WebGLRenderer({antialias:true,alpha:true});lensRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));lensRenderer.outputColorSpace=THREE.SRGBColorSpace;lensRenderer.domElement.className='avatar3d-canvas';
     scene=new THREE.Scene();
-    camera=new THREE.PerspectiveCamera(24,1,0.05,10);lensCam=new THREE.PerspectiveCamera(22,1,0.02,5);
-    scene.add(new THREE.HemisphereLight(0xffffff,0x9aa7bd,1.35));
-    const key=new THREE.DirectionalLight(0xfff4e6,2.4);key.position.set(0.6,1.2,1.4);scene.add(key);
-    const fill=new THREE.DirectionalLight(0xdbe8ff,1.0);fill.position.set(-1.2,0.6,1.0);scene.add(fill);
-    const rim=new THREE.DirectionalLight(0xffffff,0.9);rim.position.set(0.2,1.5,-1.2);scene.add(rim);
-    const loader=new GLTFLoader();let gltf;try{gltf=await loader.loadAsync(window.AVATAR_GLB||'mia.glb')}catch(e){gltf=await loader.loadAsync('mia-model.wasm')}
-    model=gltf.scene;scene.add(model);model.updateMatrixWorld(true);
-    model.traverse(o=>{if(o.isMesh&&o.morphTargetDictionary){meshes.push(o);o.frustumCulled=false;if(o.material){o.material.envMapIntensity=0}}});
-    headBone=model.getObjectByName('Bip01 Head');neckBone=model.getObjectByName('Bip01 Neck');spineBone=model.getObjectByName('Bip01 Spine1');
-    if(headBone)headQ=headBone.quaternion.clone();if(neckBone)neckQ=neckBone.quaternion.clone();if(spineBone)spineQ=spineBone.quaternion.clone();
-    const headMesh=meshes.find(m=>m.morphTargetDictionary.viseme_aa!==undefined&&m.material&&m.material.name==='head')||meshes[0];
-    const eL=skinnedCenter(headMesh,'EyeBlinkLeft'),eR=skinnedCenter(headMesh,'EyeBlinkRight'),mo=skinnedCenter(headMesh,'viseme_aa');
-    if(eL&&eR)eyeCenter.copy(eL).add(eR).multiplyScalar(0.5);else if(headBone)headBone.getWorldPosition(eyeCenter);
-    if(mo)mouthCenter.copy(mo);else mouthCenter.copy(eyeCenter).add(new THREE.Vector3(0,-0.07,0.01));
+    camera=new THREE.PerspectiveCamera(22,1,0.05,10);lensCam=new THREE.PerspectiveCamera(20,1,0.02,5);
+    scene.add(new THREE.AmbientLight(0xffffff,0.9));
+    const key=new THREE.DirectionalLight(0xffffff,1.6);key.position.set(0.5,1.2,1.5);scene.add(key);
+    const fill=new THREE.DirectionalLight(0xdfe9ff,0.6);fill.position.set(-1,0.5,1);scene.add(fill);
+    const loader=new GLTFLoader();loader.register(p=>new VRMLoaderPlugin(p));
+    let gltf;try{gltf=await loader.loadAsync(window.AVATAR_VRM||'mia-anime.vrm')}catch(e){gltf=await loader.loadAsync('mia-anime.wasm')}
+    vrm=gltf.userData.vrm;if(!vrm)throw new Error('not a vrm');
+    VRMUtils.removeUnnecessaryVertices(gltf.scene);if(VRMUtils.combineSkeletons)VRMUtils.combineSkeletons(gltf.scene);else if(VRMUtils.removeUnnecessaryJoints)VRMUtils.removeUnnecessaryJoints(gltf.scene);
+    VRMUtils.rotateVRM0(vrm);
+    vrm.scene.traverse(o=>{o.frustumCulled=false});
+    scene.add(vrm.scene);
+    const h=vrm.humanoid;headBone=h.getNormalizedBoneNode('head');neckBone=h.getNormalizedBoneNode('neck');spineBone=h.getNormalizedBoneNode('upperChest')||h.getNormalizedBoneNode('chest')||h.getNormalizedBoneNode('spine');
+    headQ=headBone.quaternion.clone();if(neckBone)neckQ=neckBone.quaternion.clone();if(spineBone)spineQ=spineBone.quaternion.clone();
+    const rUp=h.getNormalizedBoneNode('rightUpperArm'),lUp=h.getNormalizedBoneNode('leftUpperArm');if(rUp)rUp.rotation.set(0,0,-1.15);if(lUp)lUp.rotation.set(0,0,1.15);
+    vrm.update(0);vrm.scene.updateMatrixWorld(true);
+    const eL=h.getNormalizedBoneNode('leftEye'),eR=h.getNormalizedBoneNode('rightEye');
+    if(eL&&eR){const a=new THREE.Vector3(),b=new THREE.Vector3();eL.getWorldPosition(a);eR.getWorldPosition(b);eyeCenter.copy(a).add(b).multiplyScalar(0.5)}
+    else{headBone.getWorldPosition(eyeCenter);eyeCenter.y+=0.06}
+    mouthCenter.copy(eyeCenter).add(new THREE.Vector3(0,-0.055,0.02));
+    lookTarget=new THREE.Object3D();scene.add(lookTarget);if(vrm.lookAt)vrm.lookAt.target=lookTarget;
     frame();
     api.ok=true;
     if(container)api.attach(container);if(lensEl)api.lens(lensEl);
@@ -686,7 +667,7 @@ function mouthLoop(){
     if(unit){target=VIS[unit.v];label=unit.v;highlightWord(unit.ci)}
   }
   const f=0.38;for(const key of ['w','h','u','teeth','tongue','smile'])lip[key]+=(target[key]-lip[key])*f;
-  renderMouth();if(label!==vt.label){vt.label=label;setLensLabel(label);window.avatar3d?.setViseme(label)}
+  renderMouth();if(label!==vt.label){vt.label=label;setLensLabel(label);avatarMods().forEach(a=>a.setViseme(label))}
   const settled=!vt.on&&Math.abs(lip.h)<0.05&&Math.abs(lip.smile-1)<0.02;
   if(!settled)vt.raf=requestAnimationFrame(mouthLoop);else{vt.raf=0;Object.assign(lip,VIS.rest);renderMouth();highlightWord(-1)}
 }
@@ -700,7 +681,7 @@ function mouthSync(charIndex){ /* word boundary from the speech engine: re-align
   if(!vt.on)return;const k=vt.units.findIndex(u=>u.ci>=charIndex);if(k<0)return;
   vt.t0=performance.now()-vt.starts[k]*vt.unitMs;
 }
-function mouthStop(){vt.on=false;avatars.forEach(s=>s.classList.remove('speaking'));avatarMods().forEach(a=>a.speaking(false));window.avatar3d?.setViseme('rest');if(!vt.raf)vt.raf=requestAnimationFrame(mouthLoop)}
+function mouthStop(){vt.on=false;avatars.forEach(s=>s.classList.remove('speaking'));avatarMods().forEach(a=>a.speaking(false));avatarMods().forEach(a=>a.setViseme('rest'));if(!vt.raf)vt.raf=requestAnimationFrame(mouthLoop)}
 function mouth(on){if(!on)mouthStop()}
 /* karaoke highlight in the speech bubble when the bubble shows the spoken text */
 function prepWords(text){
@@ -736,7 +717,7 @@ document.addEventListener('pointerdown',()=>{try{if(prefs.naturalVoice)audioCtx(
 /* ---------- Speech (TTS) ---------- */
 const synth=window.speechSynthesis;
 let voices=[],voice=null;
-const prefs=load('mia-prefs',{rate:0.85,voiceName:null,autoRepeat:true,avatar3d:true});if(!prefs.avatarMode)prefs.avatarMode='photo';if(prefs.naturalVoice===undefined)prefs.naturalVoice=true;
+const prefs=load('mia-prefs',{rate:0.85,voiceName:null,autoRepeat:true,avatar3d:true});if(!prefs.avatarMode2)prefs.avatarMode2='3d';if(prefs.naturalVoice===undefined)prefs.naturalVoice=true;
 function pickVoice(){
   if(!synth)return;
   voices=synth.getVoices().filter(v=>/^en/i.test(v.lang));
@@ -1230,7 +1211,7 @@ const avatarPhoto=(()=>{
   return api;
 })();
 function attach3d(){
-  const mode=prefs.avatarMode;const boxes=[$('avatarHome'),$('avatarLesson')];const lens=$('avatarLesson').querySelector('.lens');
+  const mode=prefs.avatarMode2;const boxes=[$('avatarHome'),$('avatarLesson')];const lens=$('avatarLesson').querySelector('.lens');
   boxes.forEach(b=>b.classList.remove('has3d'));if(lens)lens.classList.remove('has3d');document.querySelectorAll('.avatar3d-canvas').forEach(c=>c.remove());
   const a=mode==='photo'?avatarPhoto:mode==='3d'?window.avatar3d:null;
   if(!a||!a.ok)return;
@@ -1238,9 +1219,9 @@ function attach3d(){
   boxes.forEach(b=>b.classList.toggle('has3d',b===box));
   a.attach(box);if(lens)a.lens(lens);
 }
-(function(){const l=document.createElement('div');l.className='avatar-loading ko';l.textContent='선생님 준비 중…';$('avatarHome').appendChild(l);$('avatarLesson').appendChild(l.cloneNode(true));
+(function(){const l=document.createElement('div');l.className='avatar-loading ko';l.textContent='미아 준비 중…';$('avatarHome').appendChild(l);$('avatarLesson').appendChild(l.cloneNode(true));
   const clear=()=>document.querySelectorAll('.avatar-loading').forEach(e=>e.remove());
-  document.addEventListener('avatarphoto-ready',()=>{clear();attach3d()});document.addEventListener('avatar3d-ready',()=>{clear();attach3d()});document.addEventListener('avatar3d-failed',()=>{if(prefs.avatarMode==='3d')clear()});setTimeout(clear,25000);})();
+  document.addEventListener('avatarphoto-ready',()=>{clear();attach3d()});document.addEventListener('avatar3d-ready',()=>{clear();attach3d()});document.addEventListener('avatar3d-failed',()=>{if(prefs.avatarMode2==='3d')clear()});setTimeout(clear,25000);})();
 renderHome();preloadVoice(['core']);
 $('btnHome').onclick=exitLesson;$('btnBack').onclick=exitLesson;
 $('btnContinue').onclick=()=>startLesson(nextLesson().id);
@@ -1250,8 +1231,8 @@ $('selVoice').onchange=e=>{prefs.voiceName=e.target.value;save('mia-prefs',prefs
 $('rngRate').value=prefs.rate;$('rngRate').onchange=e=>{prefs.rate=+e.target.value;save('mia-prefs',prefs);speak('Nice to meet you!')};
 function vxUI(){$('vxNat').classList.toggle('on',prefs.naturalVoice);$('vxDev').classList.toggle('on',!prefs.naturalVoice)}
 $('vxNat').onclick=()=>{prefs.naturalVoice=true;save('mia-prefs',prefs);vxUI();speak('Hello! I am Mia.')};$('vxDev').onclick=()=>{prefs.naturalVoice=false;save('mia-prefs',prefs);vxUI();speak('Hello! I am Mia.')};vxUI();
-function avUI(){$('avPhoto').classList.toggle('on',prefs.avatarMode==='photo');$('av3d').classList.toggle('on',prefs.avatarMode==='3d');$('av2d').classList.toggle('on',prefs.avatarMode==='svg')}
-const setAv=m=>{prefs.avatarMode=m;save('mia-prefs',prefs);avUI();attach3d()};$('avPhoto').onclick=()=>setAv('photo');$('av3d').onclick=()=>{setAv('3d');document.dispatchEvent(new CustomEvent('avatar3d-request'))};$('av2d').onclick=()=>setAv('svg');avUI();
+function avUI(){$('avPhoto').classList.toggle('on',prefs.avatarMode2==='photo');$('av3d').classList.toggle('on',prefs.avatarMode2==='3d');$('av2d').classList.toggle('on',prefs.avatarMode2==='svg')}
+const setAv=m=>{prefs.avatarMode2=m;save('mia-prefs',prefs);avUI();attach3d()};$('avPhoto').onclick=()=>setAv('photo');$('av3d').onclick=()=>{setAv('3d');document.dispatchEvent(new CustomEvent('avatar3d-request'))};$('av2d').onclick=()=>setAv('svg');avUI();
 function repUI(){$('repOn').classList.toggle('on',prefs.autoRepeat);$('repOff').classList.toggle('on',!prefs.autoRepeat)}
 $('repOn').onclick=()=>{prefs.autoRepeat=true;save('mia-prefs',prefs);repUI()};$('repOff').onclick=()=>{prefs.autoRepeat=false;save('mia-prefs',prefs);repUI()};repUI();
 $('btnReset').onclick=()=>{if($('btnReset').dataset.arm){progress={};save('mia-progress',progress);renderHome();$('btnReset').textContent='초기화 완료';delete $('btnReset').dataset.arm}else{$('btnReset').dataset.arm='1';$('btnReset').textContent='정말 초기화할까요? 다시 누르기'}};

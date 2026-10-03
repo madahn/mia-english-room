@@ -7,3 +7,4 @@
 ## Credits
 - 3D tutor avatar: Microsoft Rocketbox avatar library (MIT License), converted to glTF with trimmed facial blendshapes.
 - Rendering: three.js.
+- Anime tutor avatar: "three-vrm-girl" by pixiv Inc. (VRM sample model, redistribution and commercial use allowed per its embedded license), rendered with @pixiv/three-vrm.
