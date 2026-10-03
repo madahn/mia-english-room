@@ -147,6 +147,23 @@ h1,h2,h3{font-family:var(--font-display);font-weight:600;text-wrap:balance;margi
 .round:disabled{opacity:.4;cursor:not-allowed}
 @keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--coral) 55%,transparent)}100%{box-shadow:0 0 0 22px transparent}}
 
+/* writing */
+.trace-wrap{display:flex;gap:18px;align-items:center;justify-content:center;flex-wrap:wrap}
+.trace-side{display:flex;flex-direction:column;align-items:center;gap:4px}
+.trace-side .big{font-size:3.6rem;line-height:1}
+.trace-side .word{font-family:var(--font-display);font-size:1.4rem;font-weight:600}
+canvas.trace{width:320px;height:320px;max-width:100%;background:var(--surface2);border:3px solid var(--line);border-radius:22px;touch-action:none;cursor:crosshair}
+.slots{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.slot{display:inline-grid;place-items:center;min-width:46px;height:54px;padding:0 8px;border-bottom:4px solid var(--line);font-family:var(--font-display);font-size:1.8rem;font-weight:600;color:var(--sky)}
+.slot.gap{min-width:18px;border:0}
+.slot.word{font-size:1.3rem;min-width:40px;height:48px}
+.slot.filled{border-color:var(--good)}
+.tiles{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;max-width:620px}
+.tile{min-width:56px;height:56px;padding:0 14px;border-radius:16px;background:var(--surface);border:3px solid var(--line);font-family:var(--font-display);font-size:1.6rem;font-weight:600;box-shadow:var(--shadow);transition:transform .12s}
+.tile.word{font-size:1.15rem;height:50px}
+.tile:hover{transform:translateY(-3px);border-color:var(--sky)}
+.tile:disabled{opacity:.25;transform:none;box-shadow:none;cursor:default}
+.tile.wrong{border-color:var(--bad);animation:shake .35s}
 /* chat (free talk) */
 .chat{width:100%;max-width:640px;display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;padding:4px}
 .msg{max-width:85%;padding:10px 14px;border-radius:18px;font-size:1rem;line-height:1.35}
@@ -188,6 +205,12 @@ dialog::backdrop{background:rgba(10,20,40,.45)}
 .lens svg{width:100%;height:100%;display:block}
 .lens-label{position:absolute;left:0;right:0;bottom:0;text-align:center;font-family:var(--font-display);font-weight:600;font-size:.82rem;background:color-mix(in srgb,var(--fg) 70%,transparent);color:var(--surface);padding:3px 0}
 .bubble .en .hl{background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:0 4px;margin:0 -2px}
+/* 3D avatar layer */
+.avatar3d-canvas{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;z-index:1;border-radius:24px}
+.avatar-box.has3d svg.avatar,.lens.has3d svg.lens-svg{display:none}
+.lens{z-index:2}
+.lens .avatar3d-canvas{border-radius:0}
+.avatar-loading{position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:.75rem;color:var(--muted);z-index:3;pointer-events:none}
 /* avatar animation */
 .eye{animation:blink 4.2s infinite}
 .eye:nth-of-type(2){animation-delay:.05s}
@@ -277,9 +300,11 @@ dialog::backdrop{background:rgba(10,20,40,.45)}
 <dialog id="settings">
   <form method="dialog" class="dlg">
     <h2>설정 <span class="ko" style="font-size:.9rem;color:var(--muted)">(부모님용)</span></h2>
-    <div class="row"><label for="selVoice">미아 목소리</label><select id="selVoice"></select></div>
+    <div class="row"><label>목소리</label><span class="seg"><button type="button" id="vxNat">자연 음성</button><button type="button" id="vxDev">기기 음성</button></span></div>
+    <div class="row"><label for="selVoice">기기 음성 선택</label><select id="selVoice"></select></div>
     <div class="row"><label for="rngRate">말하는 속도</label><input type="range" id="rngRate" min="0.6" max="1.1" step="0.05" value="0.85"></div>
     <div class="row"><label>자동으로 다시 듣기</label><span class="seg"><button type="button" id="repOn">켜기</button><button type="button" id="repOff">끄기</button></span></div>
+    <div class="row"><label>아바타 모습</label><span class="seg"><button type="button" id="av3d">3D 선생님</button><button type="button" id="av2d">그림 캐릭터</button></span></div>
     <div class="row"><label>마이크 상태</label><span class="note" id="micStatus">확인 중…</span></div>
     <p class="note ko">마이크로 말하기 기능은 Chrome, Edge, Safari 최신 버전에서 동작해요. 마이크를 쓸 수 없는 환경에서는 "말했어요!" 버튼으로 진행합니다.</p>
     <div class="row">
@@ -291,6 +316,141 @@ dialog::backdrop{background:rgba(10,20,40,.45)}
 
 <canvas id="confetti"></canvas>
 
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+<script type="module">
+/* Mia 3D avatar: Three.js skinned head with viseme + expression blendshapes.
+   Exposes window.avatar3d = {attach(el), lens(el), setViseme(label), mood(name), listening(on), speaking(on), ready, ok} */
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+
+const VISEME_MAP={
+  rest:{}, A:{viseme_aa:1,JawOpen:0.25}, E:{viseme_E:0.85,viseme_I:0.35}, O:{viseme_O:1}, M:{viseme_PP:1},
+  F:{viseme_FF:1}, L:{viseme_nn:0.9,TongueOut:0.1}, S:{viseme_SS:0.9}, CH:{viseme_CH:1}, R:{viseme_RR:1}
+};
+const VISEME_KEYS=['viseme_aa','viseme_E','viseme_I','viseme_O','viseme_U','viseme_PP','viseme_FF','viseme_TH','viseme_DD','viseme_KK','viseme_CH','viseme_SS','viseme_nn','viseme_RR','JawOpen','TongueOut'];
+const MOODS={
+  neutral:{MouthSmileLeft:0.3,MouthSmileRight:0.3,BrowInnerUp:0.08,CheekSquintLeft:0.08,CheekSquintRight:0.08},
+  cheer:{MouthSmileLeft:0.95,MouthSmileRight:0.95,CheekSquintLeft:0.6,CheekSquintRight:0.6,EyeSquintLeft:0.35,EyeSquintRight:0.35,BrowInnerUp:0.35,BrowOuterUpLeft:0.5,BrowOuterUpRight:0.5},
+  wave:{MouthSmileLeft:0.8,MouthSmileRight:0.8,BrowInnerUp:0.3,BrowOuterUpLeft:0.4,BrowOuterUpRight:0.4,EyeWideLeft:0.2,EyeWideRight:0.2},
+  think:{MouthSmileLeft:0.1,MouthSmileRight:0.1,BrowInnerUp:0.55,BrowDownRight:0.35,MouthPucker:0.35,EyeLookUpLeft:0.45,EyeLookUpRight:0.45,EyeLookOutLeft:0.3,EyeLookInRight:0.3},
+  oops:{MouthSmileLeft:0,MouthSmileRight:0,BrowInnerUp:0.7,MouthFrownLeft:0.35,MouthFrownRight:0.35,EyeWideLeft:0.15,EyeWideRight:0.15},
+  listening:{MouthSmileLeft:0.35,MouthSmileRight:0.35,BrowInnerUp:0.35,BrowOuterUpLeft:0.3,BrowOuterUpRight:0.3,EyeWideLeft:0.35,EyeWideRight:0.35}
+};
+const HEAD_POSE={neutral:[0,0,0],cheer:[0,0,0],wave:[0,0.05,0.06],think:[-0.06,0.08,0.12],oops:[0.07,-0.04,-0.07],listening:[-0.03,0.06,0.09]};
+
+const api={ok:false,ready:null,attach(){},lens(){},setViseme(){},mood(){},listening(){},speaking(){}};
+window.avatar3d=api;
+
+const state={viseme:'rest',mood:'neutral',listening:false,speaking:false};
+const want={},cur={};
+let scene,camera,lensCam,renderer,lensRenderer,model,meshes=[],headBone,neckBone,spineBone,headQ,neckQ,spineQ;
+let container=null,lensEl=null,eyeCenter=new THREE.Vector3(),mouthCenter=new THREE.Vector3();
+let blinkAt=1.5,blinkPhase=0,saccadeAt=1,saccade={x:0,y:0},t0=performance.now(),last=0;
+
+function setWant(obj,scale=1){for(const k in obj)want[k]=obj[k]*scale}
+function clearGroup(keys){keys.forEach(k=>want[k]=0)}
+function applyMorph(name,v){for(const m of meshes){const i=m.morphTargetDictionary[name];if(i!==undefined)m.morphTargetInfluences[i]=v}}
+
+api.setViseme=label=>{state.viseme=VISEME_MAP[label]?label:'rest'};
+api.mood=name=>{state.mood=MOODS[name]?name:'neutral'};
+api.listening=on=>{state.listening=!!on};
+api.speaking=on=>{state.speaking=!!on};
+api.attach=el=>{container=el;if(!renderer)return;el.appendChild(renderer.domElement);el.classList.add('has3d');resize()};
+api.lens=el=>{lensEl=el;if(!lensRenderer||!el)return;el.appendChild(lensRenderer.domElement);el.classList.add('has3d');resize()};
+
+function resize(){
+  if(container&&renderer){const w=container.clientWidth,h=container.clientHeight;if(w&&h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}}
+  if(lensEl&&lensRenderer){const w=lensEl.clientWidth,h=lensEl.clientHeight;if(w&&h){lensRenderer.setSize(w,h,false);lensCam.aspect=w/h;lensCam.updateProjectionMatrix()}}
+}
+
+function skinnedCenter(mesh,targetName){
+  const dict=mesh.morphTargetDictionary;const ti=dict[targetName];if(ti===undefined)return null;
+  const delta=mesh.geometry.morphAttributes.position[ti];const pos=mesh.geometry.attributes.position;
+  const v=new THREE.Vector3(),sum=new THREE.Vector3();let n=0;
+  for(let i=0;i<pos.count;i++){if(Math.abs(delta.getX(i))+Math.abs(delta.getY(i))+Math.abs(delta.getZ(i))<1e-5)continue;v.fromBufferAttribute(pos,i);mesh.applyBoneTransform(i,v);v.applyMatrix4(mesh.matrixWorld);sum.add(v);n++}
+  return n?sum.multiplyScalar(1/n):null;
+}
+
+function frame(){
+  const up=new THREE.Vector3(0,1,0);
+  const look=eyeCenter.clone().add(new THREE.Vector3(0,-0.055,0));
+  camera.position.copy(look).add(new THREE.Vector3(0,0.02,0.78));camera.lookAt(look);
+  lensCam.position.copy(mouthCenter).add(new THREE.Vector3(0,0.01,0.24));lensCam.lookAt(mouthCenter);
+}
+
+function tick(){
+  requestAnimationFrame(tick);
+  const now=performance.now();const t=(now-t0)/1000;const dt=Math.min(0.05,(now-last)/1000||0.016);last=now;
+  /* expression targets */
+  const base=state.listening&&!state.speaking?MOODS.listening:MOODS[state.mood];
+  for(const k in want)want[k]=0;
+  setWant(base,state.speaking&&state.mood==='neutral'?0.45:1);
+  const vis=VISEME_MAP[state.viseme];for(const k in vis)want[k]=vis[k];
+  /* blink */
+  if(t>blinkAt){blinkPhase+=dt/0.11;if(blinkPhase>=2){blinkPhase=0;blinkAt=t+2.2+Math.random()*3.5}}
+  const bl=blinkPhase>0?Math.sin(Math.min(1,blinkPhase<1?blinkPhase:2-blinkPhase)*Math.PI/2):0;
+  want.EyeBlinkLeft=(want.EyeBlinkLeft||0)+bl;want.EyeBlinkRight=(want.EyeBlinkRight||0)+bl;
+  /* eye saccades */
+  if(t>saccadeAt){saccadeAt=t+0.8+Math.random()*2.2;saccade={x:(Math.random()-0.5)*0.5,y:(Math.random()-0.5)*0.3};if(Math.random()<0.4)saccade={x:0,y:0}}
+  if(!state.listening&&state.mood!=='think'){
+    want.EyeLookOutLeft=(want.EyeLookOutLeft||0)+Math.max(0,saccade.x);want.EyeLookInRight=(want.EyeLookInRight||0)+Math.max(0,saccade.x);
+    want.EyeLookInLeft=(want.EyeLookInLeft||0)+Math.max(0,-saccade.x);want.EyeLookOutRight=(want.EyeLookOutRight||0)+Math.max(0,-saccade.x);
+    want.EyeLookUpLeft=(want.EyeLookUpLeft||0)+Math.max(0,saccade.y);want.EyeLookUpRight=(want.EyeLookUpRight||0)+Math.max(0,saccade.y);
+    want.EyeLookDownLeft=(want.EyeLookDownLeft||0)+Math.max(0,-saccade.y);want.EyeLookDownRight=(want.EyeLookDownRight||0)+Math.max(0,-saccade.y);
+  }
+  /* smooth and apply */
+  for(const k in want){const target=Math.min(1,want[k]);const fast=VISEME_KEYS.includes(k)||k.startsWith('EyeBlink');const r=fast?0.5:0.12;cur[k]=(cur[k]||0)+(target-(cur[k]||0))*r;applyMorph(k,cur[k])}
+  /* head motion */
+  if(headBone){
+    const pose=HEAD_POSE[state.listening&&!state.speaking?'listening':state.mood]||HEAD_POSE.neutral;
+    const open=(cur.viseme_aa||0)+(cur.viseme_O||0)*0.6+(cur.viseme_E||0)*0.4;
+    const nod=state.speaking?Math.sin(t*5.2)*0.012+open*0.02:0;
+    const bounce=state.mood==='cheer'?Math.sin(t*9)*0.03:0;
+    const px=pose[0]+Math.sin(t*0.9)*0.012+nod+bounce, py=pose[1]+Math.sin(t*0.5)*0.03+(state.speaking?Math.sin(t*1.7)*0.02:0), pz=pose[2]+Math.sin(t*0.7)*0.01;
+    /* Biped bones: local X is the bone axis (up), so pitch is about Z, yaw about Y, roll about X */
+    const q=new THREE.Quaternion().setFromEuler(new THREE.Euler(pz*0.5,py,-px));
+    headBone.quaternion.copy(headQ).multiply(q);
+    if(neckBone){const qn=new THREE.Quaternion().setFromEuler(new THREE.Euler(pz*0.3,py*0.4,-px*0.4));neckBone.quaternion.copy(neckQ).multiply(qn)}
+    if(spineBone){const qs=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,Math.sin(t*0.5)*0.01,-Math.sin(t*1.3)*0.006));spineBone.quaternion.copy(spineQ).multiply(qs)}
+  }
+  if(container&&container.isConnected&&container.offsetParent!==null)renderer.render(scene,camera);
+  if(lensEl&&lensEl.isConnected&&lensEl.offsetParent!==null)lensRenderer.render(scene,lensCam);
+}
+
+api.ready=(async()=>{
+  try{
+    if(!window.WebGLRenderingContext)throw new Error('no webgl');
+    renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
+    renderer.domElement.className='avatar3d-canvas';
+    lensRenderer=new THREE.WebGLRenderer({antialias:true,alpha:true});lensRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));lensRenderer.outputColorSpace=THREE.SRGBColorSpace;lensRenderer.toneMapping=THREE.ACESFilmicToneMapping;lensRenderer.toneMappingExposure=1.05;lensRenderer.domElement.className='avatar3d-canvas';
+    scene=new THREE.Scene();
+    camera=new THREE.PerspectiveCamera(24,1,0.05,10);lensCam=new THREE.PerspectiveCamera(22,1,0.02,5);
+    scene.add(new THREE.HemisphereLight(0xffffff,0x9aa7bd,1.35));
+    const key=new THREE.DirectionalLight(0xfff4e6,2.4);key.position.set(0.6,1.2,1.4);scene.add(key);
+    const fill=new THREE.DirectionalLight(0xdbe8ff,1.0);fill.position.set(-1.2,0.6,1.0);scene.add(fill);
+    const rim=new THREE.DirectionalLight(0xffffff,0.9);rim.position.set(0.2,1.5,-1.2);scene.add(rim);
+    const gltf=await new GLTFLoader().loadAsync(window.AVATAR_GLB||'mia.glb');
+    model=gltf.scene;scene.add(model);model.updateMatrixWorld(true);
+    model.traverse(o=>{if(o.isMesh&&o.morphTargetDictionary){meshes.push(o);o.frustumCulled=false;if(o.material){o.material.envMapIntensity=0}}});
+    headBone=model.getObjectByName('Bip01 Head');neckBone=model.getObjectByName('Bip01 Neck');spineBone=model.getObjectByName('Bip01 Spine1');
+    if(headBone)headQ=headBone.quaternion.clone();if(neckBone)neckQ=neckBone.quaternion.clone();if(spineBone)spineQ=spineBone.quaternion.clone();
+    const headMesh=meshes.find(m=>m.morphTargetDictionary.viseme_aa!==undefined&&m.material&&m.material.name==='head')||meshes[0];
+    const eL=skinnedCenter(headMesh,'EyeBlinkLeft'),eR=skinnedCenter(headMesh,'EyeBlinkRight'),mo=skinnedCenter(headMesh,'viseme_aa');
+    if(eL&&eR)eyeCenter.copy(eL).add(eR).multiplyScalar(0.5);else if(headBone)headBone.getWorldPosition(eyeCenter);
+    if(mo)mouthCenter.copy(mo);else mouthCenter.copy(eyeCenter).add(new THREE.Vector3(0,-0.07,0.01));
+    frame();
+    api.ok=true;
+    if(container)api.attach(container);if(lensEl)api.lens(lensEl);
+    window.addEventListener('resize',resize);
+    if(window.ResizeObserver){const ro=new ResizeObserver(resize);if(container)ro.observe(container);if(lensEl)ro.observe(lensEl)}
+    tick();
+    document.dispatchEvent(new CustomEvent('avatar3d-ready'));
+    return true;
+  }catch(e){console.warn('avatar3d unavailable',e);api.ok=false;document.dispatchEvent(new CustomEvent('avatar3d-failed'));return false}
+})();
+
+</script>
 <script>
 window.addEventListener('error',e=>{const d=document.createElement('div');d.style.cssText='position:fixed;left:16px;right:16px;bottom:16px;z-index:99;background:#E76F51;color:#fff;padding:12px 16px;border-radius:14px;font:14px/1.4 system-ui';d.textContent='앱 실행 중 오류: '+(e.message||e);document.body.appendChild(d)});
 /* ---------- Curriculum data ---------- */
@@ -451,8 +611,8 @@ function mountAvatar(el,withLens){
   const lens=el.querySelector('svg.lens-svg');if(lens)mouths.push(lens);
   return svg;
 }
-function mood(name,ms){avatars.forEach(s=>{s.classList.remove('cheer','think','oops','wave');if(name)s.classList.add(name)});if(ms)setTimeout(()=>avatars.forEach(s=>s.classList.remove(name)),ms)}
-function setListening(on){avatars.forEach(s=>s.classList.toggle('listening',on))}
+function mood(name,ms){avatars.forEach(s=>{s.classList.remove('cheer','think','oops','wave');if(name)s.classList.add(name)});window.avatar3d?.mood(name||'neutral');if(ms)setTimeout(()=>{avatars.forEach(s=>s.classList.remove(name));window.avatar3d?.mood('neutral')},ms)}
+function setListening(on){avatars.forEach(s=>s.classList.toggle('listening',on));window.avatar3d?.listening(on)}
 
 /* ---------- Viseme engine: mouth shapes that follow the sounds ---------- */
 /* w: half width, h: opening, u: upper-lip lift, teeth/tongue: 0..1, smile: show resting smile */
@@ -524,21 +684,21 @@ function mouthLoop(){
     if(unit){target=VIS[unit.v];label=unit.v;highlightWord(unit.ci)}
   }
   const f=0.38;for(const key of ['w','h','u','teeth','tongue','smile'])lip[key]+=(target[key]-lip[key])*f;
-  renderMouth();if(label!==vt.label){vt.label=label;setLensLabel(label)}
+  renderMouth();if(label!==vt.label){vt.label=label;setLensLabel(label);window.avatar3d?.setViseme(label)}
   const settled=!vt.on&&Math.abs(lip.h)<0.05&&Math.abs(lip.smile-1)<0.02;
   if(!settled)vt.raf=requestAnimationFrame(mouthLoop);else{vt.raf=0;Object.assign(lip,VIS.rest);renderMouth();highlightWord(-1)}
 }
-function mouthStart(text,rate){
+function mouthStart(text,rate,durMs){
   vt.units=visemes(text);vt.starts=[];let acc=0;vt.units.forEach(u=>{vt.starts.push(acc);acc+=u.dur});
-  const est=Math.max(500,text.length*85/(rate||1));vt.unitMs=est/Math.max(1,acc);
-  vt.t0=performance.now();vt.on=true;avatars.forEach(s=>s.classList.add('speaking'));
+  const est=durMs||Math.max(500,text.length*85/(rate||1));vt.unitMs=est/Math.max(1,acc);
+  vt.t0=performance.now();vt.on=true;avatars.forEach(s=>s.classList.add('speaking'));window.avatar3d?.speaking(true);
   if(!vt.raf)vt.raf=requestAnimationFrame(mouthLoop);
 }
 function mouthSync(charIndex){ /* word boundary from the speech engine: re-align the timeline */
   if(!vt.on)return;const k=vt.units.findIndex(u=>u.ci>=charIndex);if(k<0)return;
   vt.t0=performance.now()-vt.starts[k]*vt.unitMs;
 }
-function mouthStop(){vt.on=false;avatars.forEach(s=>s.classList.remove('speaking'));if(!vt.raf)vt.raf=requestAnimationFrame(mouthLoop)}
+function mouthStop(){vt.on=false;avatars.forEach(s=>s.classList.remove('speaking'));window.avatar3d?.speaking(false);window.avatar3d?.setViseme('rest');if(!vt.raf)vt.raf=requestAnimationFrame(mouthLoop)}
 function mouth(on){if(!on)mouthStop()}
 /* karaoke highlight in the speech bubble when the bubble shows the spoken text */
 function prepWords(text){
@@ -552,10 +712,29 @@ function highlightWord(ci){
   if(ci<0){vt.words=[]}
 }
 
+/* ---------- Natural voice: pre-recorded neural clips with word timings, device TTS as fallback ---------- */
+let actx=null;
+const VOICE_BASE='voice/';
+let voiceManifest=null,voiceManifestP=null,curSource=null;const voiceBins={},voiceBuffers={};
+const voiceKey=t=>t.replace(/\s+/g,' ').trim();
+function audioCtx(){actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume().catch(()=>{});return actx}
+function loadManifest(){if(!voiceManifestP)voiceManifestP=fetch(VOICE_BASE+'voice.json').then(r=>r.ok?r.json():null).catch(()=>null).then(m=>{voiceManifest=m;return m});return voiceManifestP}
+function loadGroup(g){if(!voiceBins[g])voiceBins[g]=fetch(VOICE_BASE+'voice-'+g+'.bin').then(r=>r.ok?r.arrayBuffer():null).catch(()=>null);return voiceBins[g]}
+function preloadVoice(groups){if(!prefs.naturalVoice)return;loadManifest().then(m=>{if(m)groups.forEach(loadGroup)})}
+async function getClip(text){
+  if(!prefs.naturalVoice||!(window.AudioContext||window.webkitAudioContext))return null;
+  const m=await loadManifest();if(!m)return null;const e=m[voiceKey(text)];if(!e)return null;
+  if(voiceBuffers[text])return {e,buf:voiceBuffers[text]};
+  const bin=await loadGroup(e.g);if(!bin)return null;
+  try{const ctx=audioCtx();const buf=await new Promise((res,rej)=>{const p=ctx.decodeAudioData(bin.slice(e.o,e.o+e.n),res,rej);if(p&&p.then)p.then(res,rej)});voiceBuffers[text]=buf;return {e,buf}}catch(err){return null}
+}
+function stopClip(){if(curSource){try{curSource.onended=null;curSource.stop()}catch(e){}curSource=null}}
+document.addEventListener('pointerdown',()=>{try{if(prefs.naturalVoice)audioCtx()}catch(e){}},{passive:true});
+
 /* ---------- Speech (TTS) ---------- */
 const synth=window.speechSynthesis;
 let voices=[],voice=null;
-const prefs=load('mia-prefs',{rate:0.85,voiceName:null,autoRepeat:true});
+const prefs=load('mia-prefs',{rate:0.85,voiceName:null,autoRepeat:true,avatar3d:true});if(prefs.avatar3d===undefined)prefs.avatar3d=true;if(prefs.naturalVoice===undefined)prefs.naturalVoice=true;
 function pickVoice(){
   if(!synth)return;
   voices=synth.getVoices().filter(v=>/^en/i.test(v.lang));
@@ -567,10 +746,21 @@ function pickVoice(){
 }
 if(synth){pickVoice();synth.onvoiceschanged=pickVoice}
 function speak(text,{rate}={}){
-  return new Promise(res=>{
+  return new Promise(async res=>{
     const r=rate||prefs.rate;
+    stopClip();if(synth)synth.cancel();
+    const clip=await getClip(text);
+    if(clip){
+      const ctx=audioCtx();const src=ctx.createBufferSource();src.buffer=clip.buf;
+      const pr=Math.max(0.7,Math.min(1.15,(rate||prefs.rate)/0.85));src.playbackRate.value=pr;src.connect(ctx.destination);
+      let done=false;const fin=()=>{if(done)return;done=true;if(curSource===src)curSource=null;mouthStop();res()};
+      const dur=clip.buf.duration/pr,t0=ctx.currentTime,words=clip.e.w||[];let wi=0;
+      prepWords(text);mouthStart(text,r,dur*1000);
+      const sync=()=>{if(done)return;const el=(ctx.currentTime-t0)*pr;while(wi<words.length&&words[wi][0]<=el){mouthSync(words[wi][1]);wi++}requestAnimationFrame(sync)};
+      src.onended=fin;curSource=src;try{src.start()}catch(e){fin();return}
+      requestAnimationFrame(sync);setTimeout(fin,dur*1000+500);return;
+    }
     if(!synth){prepWords(text);mouthStart(text,r);setTimeout(()=>{mouthStop();res()},Math.max(800,text.length*85/r));return}
-    synth.cancel();
     const u=new SpeechSynthesisUtterance(text);
     u.lang='en-US';if(voice)u.voice=voice;u.rate=r;u.pitch=1.1;
     let done=false;const fin=()=>{if(done)return;done=true;mouthStop();res()};
@@ -582,7 +772,7 @@ function speak(text,{rate}={}){
     synth.speak(u);
   });
 }
-function stopSpeak(){if(synth)synth.cancel();mouthStop()}
+function stopSpeak(){stopClip();if(synth)synth.cancel();mouthStop()}
 
 /* ---------- Speech recognition (STT) ---------- */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -635,6 +825,7 @@ const LEVELS=[
  {id:'phonics',title:'Phonics',ko:'파닉스 · 알파벳 소리',color:'#4FA8F5',desc:'글자 이름과 소리, 대표 단어를 듣고 따라 말해요.',lessons:[0,1,2,3,4].map(i=>({id:'ph'+i,title:PHONICS[i*5]?.[0]+'–'+PHONICS[Math.min(i*5+(i===4?5:4),25)][0],ko:'알파벳 '+(i*5+1)+'~'+Math.min(i*5+(i===4?6:5),26),em:PHONICS[i*5][2],build:()=>buildPhonics(i)}))},
  {id:'words',title:'Words',ko:'기초 단어',color:'#2EC4B6',desc:'색깔, 숫자, 동물 같은 첫 단어를 그림과 함께 익혀요.',lessons:WORDS.map(w=>({id:'w_'+w.id,title:w.title,ko:w.ko,em:w.em,build:()=>buildWords(w)}))},
  {id:'talk',title:'Simple Talk',ko:'간단한 회화',color:'#FB6F92',desc:'인사, 이름, 기분처럼 짧은 문장으로 미아와 대화해요.',lessons:TALKS.map(t=>({id:'t_'+t.id,title:t.title,ko:t.ko,em:t.em,build:()=>buildTalk(t)}))},
+ {id:'writing',title:'Writing',ko:'쓰기 연습',color:'#F77F00',desc:'글자를 따라 쓰고, 단어 철자를 맞추고, 단어 카드로 문장을 만들어요.',lessons:[...[0,1,2,3,4].map(i=>({id:'wr_ph'+i,title:'ABC '+PHONICS[i*5][0]+'–'+PHONICS[Math.min(i*5+(i===4?5:4),25)][0],ko:'알파벳 따라 쓰기',em:'✏️',build:()=>buildTrace(i)})),...WORDS.map(w=>({id:'wr_'+w.id,title:w.title,ko:w.ko+' 철자 맞추기',em:'🔤',build:()=>buildSpell(w)})),...TALKS.map(t=>({id:'wr_t_'+t.id,title:t.title,ko:'문장 만들기',em:'🧩',build:()=>buildSentence(t)}))]},
  {id:'daily',title:'Daily Life',ko:'일상회화',color:'#9B6BF2',desc:'아침, 학교, 놀이터 같은 하루 장면 속에서 대화를 이어가요. 마지막엔 AI 미아와 자유롭게 이야기해요.',lessons:DAILY.map(d=>({id:'d_'+d.id,title:d.title,ko:d.ko,em:d.em,free:!!d.free,build:()=>d.free?[{type:'free'}]:buildDaily(d)}))}
 ];
 const shuffle=a=>a.map(x=>[Math.random(),x]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
@@ -712,10 +903,10 @@ function startLesson(id){
   S.lesson=ls;S.steps=ls.build();S.i=0;S.results=[];S.tries=0;
   const lv=LEVELS.find(l=>l.lessons.includes(ls));
   $('lsTitle').textContent=`${ls.em} ${ls.title}`;$('lsKo').textContent=`${lv.title} · ${ls.ko}`;
-  $('home').hidden=true;$('lesson').hidden=false;window.scrollTo(0,0);
+  $('home').hidden=true;$('lesson').hidden=false;window.scrollTo(0,0);attach3d();preloadVoice(['core',{phonics:'phonics',words:'words',talk:'talk',daily:'daily',writing:'writing'}[lv.id]]);
   if(ls.free)renderFree();else renderStep();
 }
-function exitLesson(){stopSpeak();stopListen();setListening(false);$('lesson').hidden=true;$('home').hidden=false;renderHome()}
+function exitLesson(){stopSpeak();stopListen();setListening(false);$('lesson').hidden=true;$('home').hidden=false;renderHome();attach3d()}
 function stepBar(){$('stepBar').innerHTML=S.steps.map((_,k)=>`<i class="${k<S.i?(S.results[k]?'done':'miss'):k===S.i?'cur':''}"></i>`).join('')}
 function bubble(en,ko='',hint=''){$('bubbleEn').textContent=en;$('bubbleKo').textContent=ko;$('bubbleHint').textContent=hint}
 function visualHTML(v){if(!v)return'';return `<div class="visual">${v.letter?`<div class="letter">${v.letter}<span style="font-size:.55em;color:var(--muted)">${v.letter.toLowerCase()}</span></div>`:''}${v.emoji?`<div class="big" aria-hidden="true">${v.emoji}</div>`:''}${v.swatch?`<div class="swatch" style="background:${v.swatch}"></div>`:''}${v.word?`<div class="word">${esc(v.word)}</div>`:''}${v.ipa?`<div class="ipa">소리 ${v.ipa}</div>`:''}</div>`}
@@ -750,7 +941,7 @@ async function renderStep(){
     ctrl([{id:'cRepeat',icon:'🔊',label:'다시 듣기'}]);
     $('cRepeat').onclick=()=>speak(st.prompt);
     await speak(st.prompt);
-  }
+  }else if(st.type==='trace'||st.type==='spell'||st.type==='build'){await renderWritingStep(st)}
 }
 function speakControls(){
   const items=[{id:'cRepeat',icon:'🔊',label:'다시 듣기'},{id:'cSlow',icon:'🐢',label:'천천히'}];
@@ -879,8 +1070,89 @@ async function miaTurn(kick){
   }
 }
 
+/* ---------- Writing practice: trace letters, spell words, build sentences ---------- */
+function buildTrace(i){
+  const set=PHONICS.slice(i*5,i===4?26:i*5+5);const steps=[];
+  set.forEach(([L,w,em])=>{steps.push({type:'trace',letter:L,emoji:em,word:w,prompt:`Let's write the letter ${L}. Big ${L}!`,ko:`큰 글자 ${L}를 회색 글자 위에 따라 써요`});
+    steps.push({type:'trace',letter:L.toLowerCase(),emoji:em,word:w,prompt:`Now small ${L.toLowerCase()}. Follow the gray letter!`,ko:`작은 글자 ${L.toLowerCase()}를 따라 써요`})});
+  return steps;
+}
+function buildSpell(w){
+  return w.items.slice(0,6).map(([word,vis])=>({type:'spell',word,emoji:w.color?null:vis,swatch:w.color?vis:null,prompt:`Let's spell ${word}. ${word.replace(/ /g,'').toUpperCase().split('').join(', ')}.`,done:`${cap(word)}! You spelled it!`,ko:`글자를 순서대로 눌러 ${word}를 만들어요`}));
+}
+function buildSentence(t){
+  return t.lines.filter(l=>!/_/.test(l.c)).map(l=>({type:'build',sentence:l.c,ko:l.ko,prompt:"Let's build the sentence. Tap the words in order."}));
+}
+function shakeEl(el){el.classList.add('wrong');setTimeout(()=>el.classList.remove('wrong'),450)}
+async function renderWritingStep(st){
+  const board=$('board');
+  if(st.type==='trace'){
+    bubble(st.prompt,st.ko);
+    board.innerHTML=`<div class="trace-wrap"><div class="trace-side"><div class="big" aria-hidden="true">${st.emoji}</div><div class="word">${esc(st.word)}</div></div><canvas id="traceCv" class="trace" width="320" height="320" aria-label="글자 따라 쓰기"></canvas></div><div class="feedback" id="fb"></div>`;
+    const cv=$('traceCv');setupTrace(cv,st.letter);
+    ctrl([{id:'cRepeat',icon:'🔊',label:'다시 듣기'},{id:'cClear',icon:'🧽',label:'지우기'},{id:'cCheck',icon:'✅',label:'다 썼어요',cls:'said'},{id:'cSkip',icon:'⏭️',label:'건너뛰기'}]);
+    $('cRepeat').onclick=()=>speak(st.prompt);$('cClear').onclick=()=>setupTrace(cv,st.letter);$('cSkip').onclick=()=>{S.results[S.i]=false;S.i++;renderStep()};
+    $('cCheck').onclick=async()=>{if(S.phase==='done')return;const sc=scoreTrace(cv);const fb=$('fb');
+      if(sc.cover>=0.45&&sc.spill<=0.55){S.phase='done';fb.className='feedback good';fb.textContent='Great writing! ✏️';mood('cheer',1500);ding();await speak('Great writing!');await wait(300);S.results[S.i]=S.tries===0;S.i++;renderStep()}
+      else{S.tries++;fb.className='feedback bad';fb.textContent=sc.cover<0.45?'회색 글자를 더 따라 써 보세요':'회색 글자 안쪽으로 써 보세요';mood('oops',1000);await speak('Try to follow the gray letter.')}};
+    await speak(st.prompt);
+  }else if(st.type==='spell'){
+    bubble(st.prompt,st.ko);
+    const letters=st.word.replace(/ /g,'').split('');const pool='abcdefghijklmnopqrstuvwxyz'.split('').filter(c=>!letters.includes(c));
+    const tiles=shuffle([...letters,...shuffle(pool).slice(0,2)]);let k=0;
+    board.innerHTML=visualHTML({emoji:st.emoji,swatch:st.swatch})+`<div class="slots" id="slots">${st.word.split('').map(c=>c===' '?'<span class="slot gap"></span>':'<span class="slot"></span>').join('')}</div><div class="tiles" id="tiles">${tiles.map((c,i)=>`<button class="tile" data-i="${i}" data-c="${c}">${c}</button>`).join('')}</div><div class="feedback" id="fb"></div>`;
+    const slots=[...board.querySelectorAll('.slot:not(.gap)')];
+    board.querySelectorAll('.tile').forEach(b=>b.onclick=async()=>{if(S.phase==='done'||b.disabled)return;
+      if(b.dataset.c===letters[k]){b.disabled=true;slots[k].textContent=b.dataset.c;slots[k].classList.add('filled');k++;speak(b.dataset.c.toUpperCase()+'.');
+        if(k===letters.length){S.phase='done';const fb=$('fb');fb.className='feedback good';fb.textContent=st.done+' ⭐';mood('cheer',1500);ding();await wait(500);await speak(st.done);await wait(200);S.results[S.i]=S.tries===0;S.i++;renderStep()}}
+      else{S.tries++;shakeEl(b);const fb=$('fb');fb.className='feedback bad';fb.textContent=`다음 글자는 "${letters[k]}" 예요`;mood('oops',800)}});
+    ctrl([{id:'cRepeat',icon:'🔊',label:'다시 듣기'},{id:'cSkip',icon:'⏭️',label:'건너뛰기'}]);
+    $('cRepeat').onclick=()=>speak(st.prompt);$('cSkip').onclick=()=>{S.results[S.i]=false;S.i++;renderStep()};
+    await speak(st.prompt);
+  }else if(st.type==='build'){
+    bubble(st.sentence,st.ko,'단어를 순서대로 눌러 문장을 만들어요');
+    const words=st.sentence.split(' ');const tiles=shuffle(words.map((w,i)=>({w,i})));let k=0;
+    board.innerHTML=`<div class="slots sentence" id="slots">${words.map(()=>'<span class="slot word"></span>').join('')}</div><div class="tiles" id="tiles">${tiles.map(t=>`<button class="tile word" data-i="${t.i}">${esc(t.w)}</button>`).join('')}</div><div class="feedback" id="fb"></div>`;
+    const slots=[...board.querySelectorAll('.slot')];
+    board.querySelectorAll('.tile').forEach(b=>b.onclick=async()=>{if(S.phase==='done'||b.disabled)return;
+      if(+b.dataset.i===k){b.disabled=true;slots[k].textContent=words[k];slots[k].classList.add('filled');k++;
+        if(k===words.length){S.phase='done';const fb=$('fb');fb.className='feedback good';fb.textContent='You made the sentence! ⭐';mood('cheer',1500);ding();await wait(300);await speak(st.sentence);await speak('You made the sentence!');S.results[S.i]=S.tries===0;S.i++;renderStep()}}
+      else{S.tries++;shakeEl(b);const fb=$('fb');fb.className='feedback bad';fb.textContent=`다음 단어는 "${words[k]}" 예요`;mood('oops',800)}});
+    ctrl([{id:'cRepeat',icon:'🔊',label:'문장 듣기'},{id:'cSkip',icon:'⏭️',label:'건너뛰기'}]);
+    $('cRepeat').onclick=()=>speak(st.sentence);$('cSkip').onclick=()=>{S.results[S.i]=false;S.i++;renderStep()};
+    await speak(st.prompt);await speak(st.sentence);
+  }
+}
+const traceState={glyph:null,drawn:null};
+function setupTrace(cv,letter){
+  const dpr=Math.min(window.devicePixelRatio||1,2),size=320;cv.width=size*dpr;cv.height=size*dpr;cv.style.width=size+'px';cv.style.height=size+'px';
+  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,size,size);
+  const cs=getComputedStyle(document.documentElement);
+  x.strokeStyle=cs.getPropertyValue('--line').trim()||'#D6E3F3';x.lineWidth=1;x.setLineDash([6,6]);x.beginPath();x.moveTo(20,size*0.78);x.lineTo(size-20,size*0.78);x.stroke();x.setLineDash([]);
+  x.font='600 230px Fredoka, Nunito, sans-serif';x.textAlign='center';x.textBaseline='alphabetic';
+  x.fillStyle=cs.getPropertyValue('--line').trim()||'#D6E3F3';x.fillText(letter,size/2,size*0.78);
+  x.strokeStyle=cs.getPropertyValue('--muted').trim()||'#6C7A98';x.lineWidth=1.5;x.setLineDash([4,5]);x.strokeText(letter,size/2,size*0.78);x.setLineDash([]);
+  /* glyph mask at low resolution */
+  const g=document.createElement('canvas');g.width=g.height=64;const gx=g.getContext('2d');gx.fillStyle='#000';gx.font='600 46px Fredoka, Nunito, sans-serif';gx.textAlign='center';gx.textBaseline='alphabetic';gx.fillText(letter,32,50);
+  traceState.glyph=gx.getImageData(0,0,64,64).data;
+  const d=document.createElement('canvas');d.width=d.height=64;traceState.drawn=d;
+  const dx=d.getContext('2d');dx.lineCap='round';dx.lineJoin='round';dx.strokeStyle='#000';dx.lineWidth=5;
+  x.lineCap='round';x.lineJoin='round';x.strokeStyle=cs.getPropertyValue('--sky').trim()||'#4FA8F5';x.lineWidth=22;
+  let drawing=false,lx=0,ly=0;
+  const pt=e=>{const r=cv.getBoundingClientRect();return [(e.clientX-r.left)*size/r.width,(e.clientY-r.top)*size/r.height]};
+  cv.onpointerdown=e=>{e.preventDefault();cv.setPointerCapture(e.pointerId);drawing=true;[lx,ly]=pt(e);x.beginPath();x.moveTo(lx,ly);x.lineTo(lx+0.1,ly);x.stroke();dx.beginPath();dx.moveTo(lx/5,ly/5);dx.lineTo(lx/5+0.1,ly/5);dx.stroke()};
+  cv.onpointermove=e=>{if(!drawing)return;e.preventDefault();const [px,py]=pt(e);x.beginPath();x.moveTo(lx,ly);x.lineTo(px,py);x.stroke();dx.beginPath();dx.moveTo(lx/5,ly/5);dx.lineTo(px/5,py/5);dx.stroke();lx=px;ly=py};
+  cv.onpointerup=cv.onpointercancel=cv.onpointerleave=()=>{drawing=false};
+}
+function scoreTrace(cv){
+  const g=traceState.glyph,dd=traceState.drawn.getContext('2d').getImageData(0,0,64,64).data;
+  const on=(a,i)=>a[i*4+3]>60;let glyph=0,hit=0,drawn=0,spill=0;
+  const near=i=>{const x=i%64,y=(i/64)|0;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>63||yy>63)continue;if(on(g,yy*64+xx))return true}return false};
+  for(let i=0;i<64*64;i++){const gi=on(g,i),di=on(dd,i);if(gi){glyph++;if(di)hit++}if(di){drawn++;if(!near(i))spill++}}
+  return {cover:glyph?hit/glyph:0,spill:drawn?spill/drawn:1,drawn};
+}
+
 /* ---------- Sound & confetti ---------- */
-let actx=null;
 function tone(f,t,dur,type='sine',g=.18){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const o=actx.createOscillator(),v=actx.createGain();o.type=type;o.frequency.value=f;v.gain.value=g;o.connect(v);v.connect(actx.destination);o.start(actx.currentTime+t);v.gain.setValueAtTime(g,actx.currentTime+t);v.gain.exponentialRampToValueAtTime(.001,actx.currentTime+t+dur);o.stop(actx.currentTime+t+dur)}catch(e){}}
 function ding(){tone(880,0,.15);tone(1320,.12,.25)}
 function fanfare(){[523,659,784,1047].forEach((f,i)=>tone(f,i*.12,.3,'triangle'))}
@@ -894,13 +1166,28 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
 
 /* ---------- Settings & boot ---------- */
 mountAvatar($('avatarHome'),false);mountAvatar($('avatarLesson'),true);renderMouth();
-renderHome();
+/* 3D avatar wiring */
+function attach3d(){
+  const a=window.avatar3d;const boxes=[$('avatarHome'),$('avatarLesson')];
+  if(!a||!a.ok||!prefs.avatar3d){boxes.forEach(b=>b.classList.remove('has3d'));document.querySelectorAll('.lens').forEach(l=>l.classList.remove('has3d'));document.querySelectorAll('.avatar3d-canvas').forEach(c=>c.remove());return}
+  const box=$('lesson').hidden?$('avatarHome'):$('avatarLesson');
+  boxes.forEach(b=>b.classList.toggle('has3d',b===box));
+  a.attach(box);const lens=$('avatarLesson').querySelector('.lens');if(lens)a.lens(lens);
+}
+(function(){if(!prefs.avatar3d)return;const l=document.createElement('div');l.className='avatar-loading ko';l.textContent='3D 선생님 준비 중…';$('avatarHome').appendChild(l);$('avatarLesson').appendChild(l.cloneNode(true));
+  const clear=()=>document.querySelectorAll('.avatar-loading').forEach(e=>e.remove());
+  document.addEventListener('avatar3d-ready',()=>{clear();attach3d()});document.addEventListener('avatar3d-failed',clear);setTimeout(clear,25000);})();
+renderHome();preloadVoice(['core']);
 $('btnHome').onclick=exitLesson;$('btnBack').onclick=exitLesson;
 $('btnContinue').onclick=()=>startLesson(nextLesson().id);
 $('btnHello').onclick=async()=>{mood('wave',2200);await speak("Hello! I'm Mia. Let's play with English together!")};
 $('btnSettings').onclick=()=>{$('micStatus').textContent=micLabel();$('settings').showModal()};
 $('selVoice').onchange=e=>{prefs.voiceName=e.target.value;save('mia-prefs',prefs);pickVoice();speak('Hello! I am Mia.')};
 $('rngRate').value=prefs.rate;$('rngRate').onchange=e=>{prefs.rate=+e.target.value;save('mia-prefs',prefs);speak('Nice to meet you!')};
+function vxUI(){$('vxNat').classList.toggle('on',prefs.naturalVoice);$('vxDev').classList.toggle('on',!prefs.naturalVoice)}
+$('vxNat').onclick=()=>{prefs.naturalVoice=true;save('mia-prefs',prefs);vxUI();speak('Hello! I am Mia.')};$('vxDev').onclick=()=>{prefs.naturalVoice=false;save('mia-prefs',prefs);vxUI();speak('Hello! I am Mia.')};vxUI();
+function avUI(){$('av3d').classList.toggle('on',prefs.avatar3d);$('av2d').classList.toggle('on',!prefs.avatar3d)}
+$('av3d').onclick=()=>{prefs.avatar3d=true;save('mia-prefs',prefs);avUI();attach3d()};$('av2d').onclick=()=>{prefs.avatar3d=false;save('mia-prefs',prefs);avUI();attach3d()};avUI();
 function repUI(){$('repOn').classList.toggle('on',prefs.autoRepeat);$('repOff').classList.toggle('on',!prefs.autoRepeat)}
 $('repOn').onclick=()=>{prefs.autoRepeat=true;save('mia-prefs',prefs);repUI()};$('repOff').onclick=()=>{prefs.autoRepeat=false;save('mia-prefs',prefs);repUI()};repUI();
 $('btnReset').onclick=()=>{if($('btnReset').dataset.arm){progress={};save('mia-progress',progress);renderHome();$('btnReset').textContent='초기화 완료';delete $('btnReset').dataset.arm}else{$('btnReset').dataset.arm='1';$('btnReset').textContent='정말 초기화할까요? 다시 누르기'}};
